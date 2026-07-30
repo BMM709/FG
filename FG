@@ -1,0 +1,650 @@
+-- สคริปต์สารพัดประโยชน์ V5.1 (เพิ่มระบบเสกของ, ใส่ UID เพลง, หยุดเวลา, กันตกแมพ และกันเด้ง)
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "สคริปต์สารพัดประโยชน์ V5.1 (Ultimate Edition)",
+   LoadingTitle = "กำลังโหลดระบบ V5.1...",
+   LoadingSubtitle = "by Assistant",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "RayfieldScripts",
+      FileName = "MultiPurposeHubConfigV5_1"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvite",
+      RememberJoins = true
+   },
+   KeySystem = false,
+})
+
+-- ==========================================
+-- ช่องที่ 1: หน้าหลัก (ฟังก์ชันตัวละคร, เสกของ, เพลง, หยุดเวลา, กันตกแมพ)
+-- ==========================================
+local MainTab = Window:CreateTab("หน้าหลัก", 4483362458)
+
+local MainSection = MainTab:CreateSection("ฟังก์ชันหลัก & ระบบความปลอดภัย")
+
+-- 1. ระบบกันตกแมพ (Anti-Void / Anti-Fall)
+local antiFallEnabled = false
+MainTab:CreateToggle({
+   Name = "กันตกแมพ (Anti-Void / Anti-Fall)",
+   CurrentValue = false,
+   Flag = "AntiFallToggle",
+   Callback = function(Value)
+      antiFallEnabled = Value
+   end,
+})
+
+-- 2. ระบบกันเด้ง / ป้องกันข้อผิดพลาด (Anti-Crash & Error Protection)
+local antiCrashEnabled = false
+MainTab:CreateToggle({
+   Name = "ระบบกันเด้ง / ป้องกันเกมหลุด (Anti-Crash)",
+   CurrentValue = false,
+   Flag = "AntiCrashToggle",
+   Callback = function(Value)
+      antiCrashEnabled = Value
+      if Value then
+         pcall(function()
+            local old
+            old = hookmetamethod(game, "__namecall", function(self, ...)
+               local method = getnamecallmethod()
+               if method == "Kick" and antiCrashEnabled then
+                  return nil
+               end
+               return old(self, ...)
+            end)
+         end)
+      end
+   end,
+})
+
+-- 3. ระบบหยุดเวลา (Time Stop)
+local timeStopEnabled = false
+local originalAnchoredStates = {}
+MainTab:CreateToggle({
+   Name = "ระบบหยุดเวลา (Time Stop - แช่แข็งทุกอย่าง)",
+   CurrentValue = false,
+   Flag = "TimeStopToggle",
+   Callback = function(Value)
+      timeStopEnabled = Value
+      local player = game.Players.LocalPlayer
+      if not timeStopEnabled then
+         -- คืนค่าสถานะเดิมเมื่อปิด
+         for part, state in pairs(originalAnchoredStates) do
+            if part and part.Parent then
+               part.Anchored = state
+            end
+         end
+         table.clear(originalAnchoredStates)
+      end
+   end,
+})
+
+local MainSection2 = MainTab:CreateSection("ระบบเสกของ & เปิดเพลงด้วย UID")
+
+-- 4. ระบบเสกของ (Item Spawner)
+local itemInputName = ""
+MainTab:CreateInput({
+   Name = "ชื่อหรือรหัสไอเทมที่จะเสก (Item Name)",
+   PlaceholderText = "พิมพ์ชื่อ Tool ในเกม เช่น Sword, Gun",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+      itemInputName = Text
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "เสกไอเทมเข้าตัว (Spawn Item)",
+   Callback = function()
+      pcall(function()
+         local foundItem = nil
+         -- ค้นหาใน ReplicatedStorage หรือ ServerStorage
+         foundItem = game:GetService("ReplicatedStorage"):FindFirstChild(itemInputName, true)
+         if not foundItem then
+            foundItem = game:GetService("Lighting"):FindFirstChild(itemInputName, true)
+         end
+         
+         if foundItem and (foundItem:IsA("Tool") or foundItem:IsA("Model")) then
+            local clone = foundItem:Clone()
+            clone.Parent = game.Players.LocalPlayer.Backpack
+            Rayfield:Notify({
+               Title = "เสกไอเทมสำเร็จ",
+               Content = "ได้รับ " .. itemInputName .. " แล้ว!",
+               Duration = 3,
+               Image = 4483362458,
+            })
+         else
+            Rayfield:Notify({
+               Title = "ไม่พบไอเทม",
+               Content = "ไม่พบไอเทมชื่อนี้ในระบบเกม",
+               Duration = 3,
+               Image = 4483362458,
+            })
+         end
+      end)
+   end,
+})
+
+-- 5. ระบบเปิดเพลงใส่ UID (Sound ID Player)
+local soundIdInput = ""
+local currentCustomSound = nil
+
+MainTab:CreateInput({
+   Name = "ใส่ Sound ID เพลง (UID)",
+   PlaceholderText = "เช่น 1845771897 หรือตัวเลขไอดีเพลง Roblox",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+      soundIdInput = Text
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "เล่นเพลง (Play Music by UID)",
+   Callback = function()
+      pcall(function()
+         if currentCustomSound then
+            currentCustomSound:Destroy()
+            currentCustomSound = nil
+         end
+         
+         local numericId = string.match(soundIdInput, "%d+")
+         if numericId then
+            currentCustomSound = Instance.new("Sound")
+            currentCustomSound.SoundId = "rbxassetid://" .. numericId
+            currentCustomSound.Looped = true
+            currentCustomSound.Volume = 3
+            currentCustomSound.Parent = workspace
+            currentCustomSound:Play()
+            
+            Rayfield:Notify({
+               Title = "กำลังเล่นเพลง",
+               Content = "Sound ID: " .. numericId,
+               Duration = 3,
+               Image = 4483362458,
+            })
+         end
+      end)
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "หยุดเพลง (Stop Music)",
+   Callback = function()
+      if currentCustomSound then
+         currentCustomSound:Stop()
+         currentCustomSound:Destroy()
+         currentCustomSound = nil
+         Rayfield:Notify({
+            Title = "หยุดเพลงแล้ว",
+            Content = "เสียงเพลงถูกปิดเรียบร้อย",
+            Duration = 2,
+            Image = 4483362458,
+         })
+      end
+   end,
+})
+
+local MainSection3 = MainTab:CreateSection("ฟังก์ชันเคลื่อนไหว & ตัวละคร")
+
+-- ฟังก์ชันล่องหน
+MainTab:CreateToggle({
+   Name = "ล่องหน (Invisibility)",
+   CurrentValue = false,
+   Flag = "InvisibilityToggle",
+   Callback = function(Value)
+      local player = game.Players.LocalPlayer
+      local character = player.Character
+      if character then
+         for _, v in ipairs(character:GetDescendants()) do
+            if v:IsA("BasePart") or v:IsA("Decal") then
+               if v.Name ~= "HumanoidRootPart" then
+                  v.Transparency = Value and 1 or 0
+               end
+            end
+         end
+      end
+   end,
+})
+
+-- ฟังก์ชันเดินทะลุกำแพง (Noclip)
+local noclipEnabled = false
+MainTab:CreateToggle({
+   Name = "เดินทะลุกำแพง (Noclip)",
+   CurrentValue = false,
+   Flag = "NoclipToggle",
+   Callback = function(Value)
+      noclipEnabled = Value
+   end,
+})
+
+-- ฟังก์ชันเดินกลางอากาศ (Air Walk)
+local airWalkEnabled = false
+local airWalkPart = nil
+MainTab:CreateToggle({
+   Name = "เดินกลางอากาศ (Air Walk)",
+   CurrentValue = false,
+   Flag = "AirWalkToggle",
+   Callback = function(Value)
+      airWalkEnabled = Value
+      if not airWalkEnabled and airWalkPart then
+         airWalkPart:Destroy()
+         airWalkPart = nil
+      end
+   end,
+})
+
+-- ปรับความเร็วเดิน
+MainTab:CreateSlider({
+   Name = "ความเร็วเดิน (WalkSpeed)",
+   Range = {16, 250},
+   Increment = 1,
+   CurrentValue = 16,
+   Flag = "WalkSpeedSlider",
+   Callback = function(Value)
+      local player = game.Players.LocalPlayer
+      if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+         player.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = Value
+      end
+   end,
+})
+
+-- ปรับความสูงกระโดด
+MainTab:CreateSlider({
+   Name = "ความสูงกระโดด (JumpPower)",
+   Range = {50, 250},
+   Increment = 5,
+   CurrentValue = 50,
+   Flag = "JumpPowerSlider",
+   Callback = function(Value)
+      local player = game.Players.LocalPlayer
+      if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+         local hum = player.Character:FindFirstChildOfClass("Humanoid")
+         hum.UseJumpPower = true
+         hum.JumpPower = Value
+      end
+   end,
+})
+
+-- มองเห็นในที่มืด
+MainTab:CreateToggle({
+   Name = "มองเห็นในที่มืด (Fullbright)",
+   CurrentValue = false,
+   Flag = "FullbrightToggle",
+   Callback = function(Value)
+      if Value then
+         game.Lighting.Ambient = Color3.new(1, 1, 1)
+         game.Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+         game.Lighting.Brightness = 2
+      else
+         game.Lighting.Ambient = Color3.new(0, 0, 0)
+         game.Lighting.OutdoorAmbient = Color3.new(0.5, 0.5, 0.5)
+         game.Lighting.Brightness = 1
+      end
+   end,
+})
+
+-- ระบบบิน (Fly)
+local flying = false
+local flySpeed = 50
+local function toggleFly(state)
+   flying = state
+   local player = game.Players.LocalPlayer
+   local char = player.Character
+   if not char then return end
+   local hrp = char:FindFirstChild("HumanoidRootPart")
+   local hum = char:FindFirstChildOfClass("Humanoid")
+   if not hrp or not hum then return end
+   
+   if flying then
+      hum.PlatformStand = true
+      local bg = Instance.new("BodyGyro", hrp)
+      bg.Name = "RayfieldFlyGyro"
+      bg.P = 9e4
+      bg.MaxTorque = Vector3.new(9e4, 9e4, 9e4)
+      bg.CFrame = hrp.CFrame
+      
+      local bv = Instance.new("BodyVelocity", hrp)
+      bv.Name = "RayfieldFlyVelocity"
+      bv.Velocity = Vector3.new(0, 0, 0)
+      bv.MaxForce = Vector3.new(9e4, 9e4, 9e4)
+      
+      task.spawn(function()
+         local connection
+         connection = game:GetService("RunService").RenderStepped:Connect(function()
+            if not flying or not char or not hrp.Parent then
+               if bg then bg:Destroy() end
+               if bv then bv:Destroy() end
+               if hum then hum.PlatformStand = false end
+               if connection then connection:Disconnect() end
+               return
+            end
+            local cam = workspace.CurrentCamera
+            bg.CFrame = cam.CFrame
+            local moveDir = hum.MoveDirection
+            if moveDir.Magnitude > 0 then
+               local camCFrame = cam.CFrame
+               local relativeDir = camCFrame:VectorToObjectSpace(moveDir)
+               bv.Velocity = (camCFrame.LookVector * -relativeDir.Z + camCFrame.RightVector * relativeDir.X) * flySpeed
+            else
+               bv.Velocity = Vector3.new(0, 0.1, 0)
+            end
+         end)
+      end)
+   else
+      hum.PlatformStand = false
+      if hrp:FindFirstChild("RayfieldFlyGyro") then hrp.RayfieldFlyGyro:Destroy() end
+      if hrp:FindFirstChild("RayfieldFlyVelocity") then hrp.RayfieldFlyVelocity:Destroy() end
+   end
+end
+
+MainTab:CreateToggle({
+   Name = "บินอิสระ (Smooth Fly)",
+   CurrentValue = false,
+   Flag = "FlyToggle",
+   Callback = function(Value)
+      toggleFly(Value)
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "ความเร็วในการบิน",
+   Range = {10, 150},
+   Increment = 5,
+   CurrentValue = 50,
+   Flag = "FlySpeedSlider",
+   Callback = function(Value)
+      flySpeed = Value
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "รีจอยส์เซิร์ฟเวอร์เดิม (Rejoin)",
+   Callback = function()
+      game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer)
+   end,
+})
+
+-- ==========================================
+-- ช่องที่ 2: ระบบช่วยเล่น (Aimbot & Hitbox)
+-- ==========================================
+local CombatTab = Window:CreateTab("ระบบช่วยเล่น", 4483362458)
+CombatTab:CreateSection("ขยาย Hitbox หัว")
+local hitboxEnabled = false
+local hitboxSize = 4
+
+CombatTab:CreateToggle({
+   Name = "เปิด/ปิด ขยาย Hitbox หัว",
+   CurrentValue = false,
+   Flag = "HitboxToggle",
+   Callback = function(Value)
+      hitboxEnabled = Value
+   end,
+})
+
+CombatTab:CreateSlider({
+   Name = "ขนาด Hitbox",
+   Range = {2, 12},
+   Increment = 1,
+   CurrentValue = 4,
+   Flag = "HitboxSizeSlider",
+   Callback = function(Value)
+      hitboxSize = Value
+   end,
+})
+
+CombatTab:CreateSection("ระบบล็อกหัว (Aimbot)")
+local aimbotEnabled = false
+CombatTab:CreateToggle({
+   Name = "ล็อกหัวออโต้ (Aimbot)",
+   CurrentValue = false,
+   Flag = "AimbotToggle",
+   Callback = function(Value)
+      aimbotEnabled = Value
+   end,
+})
+
+-- ==========================================
+-- ช่องที่ 3: มองทะลุ (ESP) & มุมมอง (POV)
+-- ==========================================
+local ESPTab = Window:CreateTab("มองทะลุ & มุมมอง", 4483362458)
+ESPTab:CreateSection("ตั้งค่าระบบ ESP")
+local espHighlightEnabled = false
+
+ESPTab:CreateToggle({
+   Name = "ESP เรืองแสงตัวละคร (Highlight)",
+   CurrentValue = false,
+   Flag = "HighlightToggle",
+   Callback = function(Value)
+      espHighlightEnabled = Value
+      for _, p in ipairs(game.Players:GetPlayers()) do
+         if p ~= game.Players.LocalPlayer and p.Character then
+            local hl = p.Character:FindFirstChild("RayfieldHighlight")
+            if hl then hl.Enabled = Value end
+         end
+      end
+   end,
+})
+
+ESPTab:CreateSection("ตั้งค่ามุมมองกล้อง (POV / FOV)")
+local Camera = workspace.CurrentCamera
+ESPTab:CreateSlider({
+   Name = "ปรับมุมมอง (FOV)",
+   Range = {50, 120},
+   Increment = 1,
+   CurrentValue = 70,
+   Flag = "FOVSlider",
+   Callback = function(Value)
+      Camera.FieldOfView = Value
+   end,
+})
+
+-- ==========================================
+-- ช่องที่ 4: เครื่องมือพิเศษ (F3X & หลุมดำ)
+-- ==========================================
+local ToolTab = Window:CreateTab("เครื่องมือพิเศษ", 4483362458)
+ToolTab:CreateSection("เสกไอเทม")
+ToolTab:CreateButton({
+   Name = "เสก F3X (Building Tools) [ใส่ช่องกระเป๋า]",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/FFitch/F3X/main/loader.lua"))()
+      end)
+   end,
+})
+
+ToolTab:CreateSection("ระบบหลุมดำและเทเลพอร์ตผู้เล่น")
+local blackholeEnabled = false
+ToolTab:CreateToggle({
+   Name = "เปิดหลุมดำดึงผู้เล่นทุกคนมาหาเรา (Blackhole)",
+   CurrentValue = false,
+   Flag = "BlackholeToggle",
+   Callback = function(Value)
+      blackholeEnabled = Value
+   end,
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local playerList = {}
+
+for _, p in ipairs(Players:GetPlayers()) do
+   if p ~= LocalPlayer then table.insert(playerList, p.Name) end
+end
+
+Players.PlayerAdded:Connect(function(p)
+   if p ~= LocalPlayer then table.insert(playerList, p.Name) end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+   for i, v in ipairs(playerList) do
+      if v == p.Name then table.remove(playerList, i) end
+   end
+end)
+
+local selectedPlayer = nil
+local PlayerDropdown = ToolTab:CreateDropdown({
+   Name = "เลือกผู้เล่นเป้าหมาย",
+   Options = playerList,
+   CurrentOption = "",
+   Flag = "SelectedPlayer",
+   Callback = function(Option)
+      selectedPlayer = Option
+   end,
+})
+
+ToolTab:CreateButton({
+   Name = "รีเฟรชรายชื่อผู้เล่น",
+   Callback = function()
+      table.clear(playerList)
+      for _, p in ipairs(Players:GetPlayers()) do
+         if p ~= LocalPlayer then table.insert(playerList, p.Name) end
+      end
+      PlayerDropdown:Refresh(playerList)
+   end,
+})
+
+ToolTab:CreateButton({
+   Name = "วาบไปหาผู้เล่นที่เลือก (Teleport to Player)",
+   Callback = function()
+      if selectedPlayer then
+         local target = Players:FindFirstChild(selectedPlayer)
+         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+               LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+            end
+         end
+      end
+   end,
+})
+
+-- ==========================================
+-- ช่องที่ 5: ระบบ AFK & กันเด้ง (Anti-AFK)
+-- ==========================================
+local AFKTab = Window:CreateTab("ระบบ AFK & กันเด้ง", 4483362458)
+AFKTab:CreateSection("ระบบป้องกันการหลุดเกม (Anti-AFK)")
+local antiAfkEnabled = false
+local antiAfkConnection = nil
+
+AFKTab:CreateToggle({
+   Name = "เปิดระบบกันหลุด AFK",
+   CurrentValue = false,
+   Flag = "AntiAFKToggle",
+   Callback = function(Value)
+      antiAfkEnabled = Value
+      if antiAfkEnabled then
+         local vu = game:GetService("VirtualUser")
+         antiAfkConnection = LocalPlayer.Idled:Connect(function()
+            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+         end)
+      else
+         if antiAfkConnection then
+            antiAfkConnection:Disconnect()
+            antiAfkConnection = nil
+         end
+      end
+   end,
+})
+
+-- ==========================================
+-- ลูปการทำงานหลัก (RenderStepped)
+-- ==========================================
+local RunService = game:GetService("RunService")
+
+RunService.RenderStepped:Connect(function()
+   -- 1. ระบบกันตกแมพ
+   if antiFallEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+      local hrp = LocalPlayer.Character.HumanoidRootPart
+      if hrp.Position.Y < -30 then
+         hrp.CFrame = CFrame.new(hrp.Position.X, 20, hrp.Position.Z)
+         hrp.Velocity = Vector3.new(0, 0, 0)
+      end
+   end
+
+   -- 2. ระบบหยุดเวลา (Time Stop)
+   if timeStopEnabled then
+      for _, v in ipairs(workspace:GetDescendants()) do
+         if v:IsA("BasePart") and not v.Anchored then
+            local isLocalChar = LocalPlayer.Character and v:IsDescendantOf(LocalPlayer.Character)
+            if not isLocalChar then
+               if originalAnchoredStates[v] == nil then
+                  originalAnchoredStates[v] = v.Anchored
+               end
+               v.Anchored = true
+            end
+         end
+      end
+   end
+
+   -- 3. ระบบ Noclip
+   if noclipEnabled and LocalPlayer.Character then
+      for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+         if part:IsA("BasePart") then part.CanCollide = false end
+      end
+   end
+
+   -- 4. ระบบเดินกลางอากาศ
+   if airWalkEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+      local hrp = LocalPlayer.Character.HumanoidRootPart
+      if not airWalkPart or not airWalkPart.Parent then
+         airWalkPart = Instance.new("Part")
+         airWalkPart.Name = "AirWalkPlatform"
+         airWalkPart.Size = Vector3.new(4, 1, 4)
+         airWalkPart.Transparency = 1
+         airWalkPart.Anchored = true
+         airWalkPart.CanCollide = true
+         airWalkPart.Parent = workspace
+      end
+      airWalkPart.CFrame = hrp.CFrame - Vector3.new(0, 3.5, 0)
+   else
+      if airWalkPart then
+         airWalkPart:Destroy()
+         airWalkPart = nil
+      end
+   end
+
+   -- 5. ระบบหลุมดำ
+   if blackholeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+      local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+      for _, p in ipairs(Players:GetPlayers()) do
+         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = p.Character.HumanoidRootPart
+            hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(myPos + Vector3.new(0, 0, 3)), 0.2)
+         end
+      end
+   end
+
+   -- 6. ระบบ Hitbox & ESP
+   for _, p in ipairs(Players:GetPlayers()) do
+      if p ~= LocalPlayer and p.Character then
+         local head = p.Character:FindFirstChild("Head")
+         local hum = p.Character:FindFirstChildOfClass("Humanoid")
+         if head and hum and hum.Health > 0 then
+            if hitboxEnabled then
+               head.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+               head.Transparency = 0.5
+               head.CanCollide = false
+            else
+               head.Size = Vector3.new(2, 1, 1)
+               head.Transparency = 0
+            end
+            
+            local hl = p.Character:FindFirstChild("RayfieldHighlight")
+            if not hl then
+               hl = Instance.new("Highlight")
+               hl.Name = "RayfieldHighlight"
+               hl.FillColor = Color3.fromRGB(255, 255, 255)
+               hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+               hl.FillTransparency = 0.5
+               hl.OutlineTransparency = 0
+               hl.Parent = p.Character
+            end
+            hl.Enabled = espHighlightEnabled
+         end
+      end
+   end
+
+   -- 7. ระบบ Aimbot
+   if aimbotEnabled the
